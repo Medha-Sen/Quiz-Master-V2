@@ -4,13 +4,14 @@ from models import db, User, Role
 from routes import routes_bp  
 from datetime import datetime
 from flask_security import Security, SQLAlchemyUserDatastore, hash_password
+from resources import api
 
 def create_app():
     app = Flask(__name__)
     app.config.from_object(LocalDevelopmentConfig)
     
     db.init_app(app)
-
+    api.init_app(app)  
     # Setup Flask-Security (Token-based authentication)
     user_datastore = SQLAlchemyUserDatastore(db, User, Role)
     app.security = Security(app, user_datastore)
@@ -42,7 +43,7 @@ def create_admin_account(user_datastore):
             full_name="Admin User",
             qualification="Supervisor",
             dob=datetime.strptime("2000-01-01", "%Y-%m-%d").date(),
-            roles=["Admin"],  # ✅ Assign Admin role
+            roles=["Admin","User"],  # ✅ Assign Admin role
             active=True
         )
         admin_role = user_datastore.find_role("Admin")

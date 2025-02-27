@@ -1,13 +1,13 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, render_template
 from flask_security import auth_required, current_user, roles_required
 from models import db, User, Role
 from flask_security.utils import hash_password, verify_password
 
 routes_bp = Blueprint("routes", __name__)
 
-@routes_bp.route("/api/")
+@routes_bp.route("/", methods=["GET"])
 def home():
-    return jsonify({"message": "Welcome to Quiz Master V2!"})
+    return render_template("index.html")
 
 @routes_bp.route("/api/register", methods=["POST"])
 def register():
@@ -31,9 +31,18 @@ def login():
     password = data.get("password")
 
     user = current_app.security.datastore.find_user(email=email)
-
+    token = user.get_auth_token()
     if user and verify_password(password, user.password):
-        return jsonify({"message": "Login successful", "user": email}), 200
+        # Extract role dynamically
+        role = user.roles[0].name if user.roles else "User"  # Default to "User" if no role found
+
+        return jsonify({
+            "message": "Login successful",
+            "user": email,
+            "role": role , # Send role in response
+            "token": token, 
+            "redirect": "/admin" if role == "Admin" else "/"
+        }), 200
     else:
         return jsonify({"error": "Invalid credentials"}), 401
 
