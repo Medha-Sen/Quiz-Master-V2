@@ -20,3 +20,14 @@ class LocalDevelopmentConfig(Config):
     WTF_CSRF_ENABLED = False
     # Token Authentication
     SECURITY_TOKEN_AUTHENTICATION_HEADER = "Authentication-Token"
+    ##Celery
+    CELERY_BROKER_URL = "redis://localhost:6379/0"  # Redis as a message queue
+    RESULT_BACKEND = "redis://localhost:6379/0"  # Store results in Redis
+    CELERY_TASK_SERIALIZER = "json"
+    CELERY_ACCEPT_CONTENT = ["json"]
+
+    MAIL_SERVER = "smtp.gmail.com"  # SMTP server for email notifications
+    MAIL_PORT = 587
+    MAIL_USE_TLS = True
+    MAIL_USERNAME = "medha.iitm@gmail.com"  # Replace with your email
+    MAIL_PASSWORD = "cqos cgez xdxl yfoh"

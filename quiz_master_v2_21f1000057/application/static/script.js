@@ -8,7 +8,13 @@ import QuizManagement from "./components/QuizManagement.js";
 import AddQuiz from "./components/AddQuiz.js";
 import QuizDetails from "./components/QuizDetails.js";
 import AddQuestion from "./components/AddQuestion.js"; // Import AddQuestion component
-
+import UserDashboard from "./components/UserDashboard.js";
+import EditUser from "./components/EditUser.js";
+import AttemptQuiz from "./components/AttemptQuiz.js"; 
+import CurrentResult from "./components/CurrentResult.js";
+import ScoreSummary from "./components/ScoreSummary.js"; 
+import AdminSummary from "./components/AdminSummary.js"; 
+import UserSummary from "./components/UserSummary.js"; 
 const routes = [
   { path: "/", component: Home },
   { path: "/login", component: Login },
@@ -51,7 +57,24 @@ const routes = [
   {
     path: "/edit-question/:quizId/:questionId",
     component: AddQuestion
-   }
+   },
+   { 
+    path: "/user", 
+    component: UserDashboard,
+    meta: { requiresAuth: true, role: "User" } 
+  },
+  { path: "/edit-profile", component: EditUser },
+  { 
+    path: "/attempt-quiz/:quizId", 
+    component: AttemptQuiz, 
+    meta: { requiresAuth: true, role: "User" }
+  },
+  { path: "/results/:quizId", component: CurrentResult, meta: { requiresAuth: true, role: "User" } },
+  { path: "/score-summary", component: ScoreSummary, meta: { requiresAuth: true, role: "User" } },
+  {
+    path: '/summary', component: AdminSummary, meta: { requiresAuth: true, role: "Admin" } 
+  },
+  { path: "/user-summary/:user_id", component: UserSummary, props: true }
 ];
 
 const router = new VueRouter({ routes });

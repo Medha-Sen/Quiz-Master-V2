@@ -1,0 +1,332 @@
+export default {
+    template: `
+<div class="score-summary">
+  <!-- Navigation Panel -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-lg p-3">
+    <div class="container-fluid d-flex justify-content-between">
+      <span class="navbar-brand fs-4 fw-bold text-light">
+        <i class="bi bi-trophy-fill"></i> My Scores
+      </span>
+      <div>
+        <router-link class="btn btn-outline-light me-2 px-4 py-2 fw-bold" to="/user">
+          <i class="bi bi-arrow-left-circle-fill"></i> Dashboard
+        </router-link>
+        <button class="btn btn-danger px-4 py-2 fw-bold" @click="logout">
+          <i class="bi bi-box-arrow-right"></i> Logout
+        </button>
+      </div>
+    </div>
+  </nav>
+    <!-- Leaderboard Section -->
+    <div class="container mt-5 text-center">
+      <h3 class="fw-bold text-warning">
+        <i class="bi bi-trophy-fill"></i> Quiz Leaderboard
+      </h3>
+
+      <div v-if="leaderboard.length > 0">
+        <div class="table-responsive mt-3" style="background-color: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+          <table class="table table-bordered table-striped shadow-sm text-center">
+            <thead class="table-dark text-light">
+              <tr>
+                <th>Rank</th>
+                <th>Username</th>
+                <th>Avg Score</th>
+                <th>Attempts</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(user, index) in leaderboard" :key="user.username">
+                <td class="fw-bold text-primary">{{ index + 1 }}</td>
+                <td class="fw-bold">{{ user.username }}</td>
+                <td class="text-success fw-bold">{{ user.avg_score.toFixed(2) }}</td>
+                <td class="text-info fw-bold">{{ user.num_attempts }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div v-else class="mt-3">
+        <p class="text-muted">Leaderboard is empty. Take a quiz to get ranked! 🎯</p>
+      </div>
+    </div>
+    <!-- Summary Section -->
+  <div class="container mt-5">
+    <h2 class="fw-bold text-primary text-center mb-3">
+      Your Quiz Performance <i class="bi bi-bar-chart-line-fill"></i>
+    </h2>
+    <p class="text-muted text-center fs-5">Track your progress and celebrate your achievements! 🎯</p>
+
+    <div v-if="loading" class="text-center mt-4">
+      <div class="spinner-border text-primary" role="status"></div>
+      <p class="mt-2 fs-5">Loading scores...</p>
+    </div>
+
+    <div v-else-if="quizSummary.length === 0" class="text-center mt-4">
+      <p class="fs-4 text-muted">No quiz attempts yet. Start learning today! 📚</p>
+    </div>
+    <div v-else>
+      <!-- Summary Table -->
+      <div class="table-responsive">
+        <table class="table table-hover table-striped table-bordered shadow-lg text-center align-middle">
+          <thead class="table-dark text-light">
+            <tr>
+              <th>Quiz ID</th>
+              <th>Subject</th>
+              <th>Chapter</th>
+              <th>Total Attempts</th>
+              <th>Highest Score</th>
+              <th>Average Score</th>
+              <th>Attempt History</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="quiz in quizSummary" :key="quiz.quiz_id">
+              <td class="fw-bold text-primary">{{ quiz.quiz_id }}</td>
+              <td>{{ quiz.subject_name }}</td>
+              <td>{{ quiz.chapter_name }}</td>
+              <td class="fw-bold">{{ quiz.total_attempts }}</td>
+              <td class="text-success fw-bold">{{ quiz.highest_score }}</td>
+              <td class="text-info fw-bold">{{ quiz.average_score.toFixed(2) }}</td>
+              <td>
+                <button class="btn btn-info btn-sm fw-bold px-3 py-1 shadow-sm" @click="showHistory(quiz.quiz_id)">
+                  <i class="bi bi-clock-history"></i> View
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Attempt History Modal -->
+  <div v-if="showModal" class="modal fade show d-block bg-dark bg-opacity-50" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header bg-info text-white">
+          <h5 class="modal-title"><i class="bi bi-clock-history"></i> Attempt History - Quiz ID: {{ currentQuizID }}</h5>
+          <button type="button" class="btn-close" @click="showModal = false"></button>
+        </div>
+        <div class="modal-body">
+          <table class="table table-bordered table-striped text-center shadow-sm">
+            <thead class="table-light">
+              <tr>
+                <th>Timestamp</th>
+                <th>Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="attempt in attemptHistory" :key="attempt.timestamp">
+                <td class="fw-bold">{{ formatDate(attempt.timestamp) }}</td>
+                <td class="text-success fw-bold">{{ attempt.total_scored }} / {{ attempt.noq }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-danger fw-bold px-4 py-2" @click="showModal = false">
+            <i class="bi bi-x-circle"></i> Close
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+    <!-- Performance Overview Section -->
+    <div class="container mt-5 text-center">
+      <h3 class="fw-bold text-success">
+        <i class="bi bi-pie-chart-fill"></i> Performance Overview
+      </h3>
+
+      <div v-if="subjectChartData && trendChartData" class="row mt-4">
+        <div class="col-md-6">
+          <div style="background-color: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+            <h5 class="text-primary">📊 Subject-wise Average Scores</h5>
+            <canvas ref="subjectChart"></canvas>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div style="background-color: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+            <h5 class="text-primary">📈 Performance Trend Over Time</h5>
+            <canvas ref="trendChart"></canvas>
+          </div>
+        </div>
+      </div>
+    `,
+  
+    data() {
+      return {
+        leaderboard: [], // To store leaderboard data (if needed)
+        subjectChartData: {},         // To store subject-wise average scores data (if needed)
+        trendChartData: {},           // To store trend data (if needed)
+        scores:[],
+        loading:true,
+        quizSummary: [],             // To store the quiz summary data
+        showModal: false,            // To control the visibility of the attempt history modal
+        currentQuizID: null,         // To store the current quiz ID for showing history
+        attemptHistory: []   
+      };
+    },
+  
+    methods: {
+        async fetchLeaderboard() {
+            try {
+                console.log("Fetching leaderboard...");
+                const response = await fetch(`http://127.0.0.1:5000/api/leaderboard`);
+        
+                if (!response.ok) {
+                    throw new Error(`Error: ${response.statusText}`);
+                }
+        
+                const data = await response.json();
+        
+                if (data.leaderboard && Array.isArray(data.leaderboard)) {
+                    this.leaderboard = data.leaderboard;
+                } else {
+                    console.error("Unexpected leaderboard data format:", data);
+                }
+            } catch (error) {
+                console.error("Error fetching leaderboard:", error);
+            }
+        },                                     
+      async fetchCharts(userID) {
+        try {
+          const response = await fetch(`http://127.0.0.1:5000/api/scores/charts/${userID}`);
+          const data = await response.json();
+    
+          if (data.subject_chart && data.trend_chart) {
+            this.subjectChartData = data.subject_chart;
+            this.trendChartData = data.trend_chart;
+            this.renderCharts();
+          } else {
+            console.error("Chart data missing:", data);
+          }
+        } catch (error) {
+          console.error("Error fetching charts:", error);
+        }
+      },      
+      renderCharts() {
+        const subjectCtx = this.$refs.subjectChart.getContext('2d');
+        const trendCtx = this.$refs.trendChart.getContext('2d');
+      
+        // Render Subject-wise Average Scores Chart
+        new Chart(subjectCtx, {
+          type: 'bar',
+          data: this.subjectChartData,
+          options: {
+            responsive: true,
+            scales: {
+              x: {
+                beginAtZero: true,
+                title: {
+                  display: true,
+                  text: 'Subjects'
+                }
+              },
+              y: {
+                beginAtZero: true,
+                title: {
+                  display: true,
+                  text: 'Scores'
+                }
+              }
+            },
+            plugins: {
+              legend: { position: 'top' }
+            }
+          }
+        });
+      
+        // Render Performance Trend Pie Chart
+        new Chart(trendCtx, {
+          type: 'pie',
+          data: this.trendChartData,
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { position: 'top' }
+            }
+          }
+        });
+      },
+      async fetchScores() {
+        try {
+          console.log("Fetching scores...");
+          const user = JSON.parse(localStorage.getItem("user"));
+          if (!user || !user.id) {
+            console.error("User ID not found in localStorage");
+            return;
+          }
+      
+          const response = await fetch(`http://127.0.0.1:5000/api/scores/${user.id}?latest=false`);
+          const data = await response.json();
+          console.log("Received scores:", data);
+      
+          if (Array.isArray(data)) {
+            this.scores = data;
+            this.processQuizSummary(); // Fetch charts after scores
+          } else {
+            console.error("Unexpected data format:", data);
+            this.scores = [];
+          }
+        } catch (error) {
+          console.error("Error fetching scores:", error);
+        } finally {
+          this.loading = false;
+        }
+      },   
+      processQuizSummary() {
+        const grouped = {};
+        this.scores.forEach(score => {
+          if (!grouped[score.quiz_id]) {
+            grouped[score.quiz_id] = {
+              quiz_id: score.quiz_id,
+              subject_name: score.subject_name || "Unknown",
+              chapter_name: score.chapter_name || "Unknown",
+              total_attempts: 0,
+              highest_score: 0,
+              total_score: 0
+            };
+          }
+          
+          grouped[score.quiz_id].total_attempts++;
+          grouped[score.quiz_id].total_score += score.total_scored;
+          grouped[score.quiz_id].highest_score = Math.max(grouped[score.quiz_id].highest_score, score.total_scored);
+        });
+      
+        // Compute average score
+        this.quizSummary = Object.values(grouped).map(quiz => ({
+          ...quiz,
+          average_score: quiz.total_score / quiz.total_attempts
+        }));
+      },
+    showHistory(quizID) {
+      this.currentQuizID = quizID;
+      this.attemptHistory = this.scores.filter(score => score.quiz_id === quizID);
+      this.showModal = true;
+    },
+
+    formatDate(date) {
+      if (!date) return "N/A";
+      return new Date(date).toLocaleDateString("en-US", { 
+        year: "numeric", month: "long", day: "numeric"
+      });
+    },
+
+    logout() {
+        localStorage.removeItem("user_id");
+        this.$router.push('/login');
+      },
+    },
+  
+    mounted() {
+      const user = JSON.parse(localStorage.getItem("user"));
+      if (user && user.id) {
+        this.fetchScores();
+        this.fetchCharts(user.id); // Fetch charts
+        this.fetchLeaderboard();  // Fetch leaderboard
+      }
+    },
+  };
+  

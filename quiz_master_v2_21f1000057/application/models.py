@@ -94,7 +94,7 @@ class Scores(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     time_stamp_of_attempt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     total_scored = db.Column(db.Integer, nullable=False)
-
+    
 # Database Creation
 if __name__ == '__main__':
     with app.app_context():
