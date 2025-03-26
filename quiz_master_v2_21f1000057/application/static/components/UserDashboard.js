@@ -116,18 +116,21 @@ export default {
       }
     },
     async downloadQuizHistory() {
-      // Retrieve user from local storage
       const user = JSON.parse(localStorage.getItem("user"));
-  
-      // Check if user exists and has an ID
+    
       if (user && user.id) {
-          const downloadUrl = `/download_quiz_history/${user.id}`;
-          console.log("Downloading from:", downloadUrl);
-          window.location.href = downloadUrl;
+        const downloadUrl = `/download_quiz_history/${user.id}`;
+        console.log("Downloading from:", downloadUrl);
+        window.location.href = downloadUrl;
+    
+        // Show a confirmation popup after a short delay
+        setTimeout(() => {
+          alert("✅ Quiz history download complete!");
+        }, 1500);
       } else {
-          console.error("User ID not found in localStorage!");
+        console.error("User ID not found in localStorage!");
       }
-  },  
+    },      
     filterQuizzes() {
       const query = this.searchQuery.toLowerCase();
       if (!query) {

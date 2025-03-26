@@ -23,7 +23,16 @@ export default {
           <h2 class="fw-bold text-primary text-center mb-3">
             {{ fullName }}'s Quiz Performance <i class="bi bi-bar-chart-line-fill"></i>
           </h2>
-  
+          <div class="toast-container position-fixed top-0 start-0 p-3">
+            <div id="exportToast" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="polite" aria-atomic="true">
+              <div class="d-flex">
+                <div class="toast-body">
+                  ✅ CSV export successful! The file has been downloaded.
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+              </div>
+            </div>
+          </div>
           <div v-if="loading" class="text-center mt-4">
             <div class="spinner-border text-primary" role="status"></div>
             <p class="mt-2 fs-5">Loading scores...</p>
@@ -211,15 +220,20 @@ export default {
           .concat(this.quizSummary.map(quiz => 
             `${quiz.quiz_id},${quiz.subject_name},${quiz.chapter_name},${quiz.total_attempts},${quiz.highest_score},${quiz.average_score.toFixed(2)}`
           )).join("\n");
-  
+      
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
         link.setAttribute("download", `${this.fullName}_quiz_summary.csv`);
         document.body.appendChild(link);
         link.click();
-      },
-  
+      
+        // Show Bootstrap toast notification
+        setTimeout(() => {
+          const exportToast = new bootstrap.Toast(document.getElementById("exportToast"));
+          exportToast.show();
+        }, 1000); // Delay ensures it appears after download
+      },  
       logout() {
         this.$router.push("/login");
       }

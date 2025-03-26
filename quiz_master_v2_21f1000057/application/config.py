@@ -10,6 +10,7 @@ class Config:
 
 class LocalDevelopmentConfig(Config):
     #configuration
+    BASE_URL = os.getenv("BASE_URL", "http://127.0.0.1:5000")
     SQLALCHEMY_DATABASE_URI = "sqlite:///quiz_master_v2.db"
     DEBUG=True
 

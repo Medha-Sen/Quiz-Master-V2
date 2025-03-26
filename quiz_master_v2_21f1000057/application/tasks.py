@@ -39,7 +39,7 @@ celery = make_celery(app)
 mail = Mail(app)
 # Initialize APScheduler
 scheduler = APScheduler()
-scheduler.configure(timezone=timezone("Asia/Kolkata"))
+#scheduler.configure(timezone=timezone("Asia/Kolkata"))
 if not scheduler.running:
     scheduler.init_app(app)
     scheduler.start()
@@ -59,7 +59,7 @@ def send_quiz_reminder():
             )
             mail.send(msg)
         return f"Daily Quiz Reminders sent to {len(users)} users."
-@shared_task
+'''@shared_task
 def send_monthly_performance_report():
     """Send monthly performance reports to users as an email attachment."""
     with app.app_context():
@@ -147,7 +147,133 @@ def export_user_summary(user_id):
         return {"message": "Export successful", "file_path": export_path}
     
     except Exception as e:
+        return {"error": str(e)}'''
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+
+@shared_task
+def export_user_summary(user_id):
+    """Exports a user's quiz summary data to a PDF asynchronously."""
+    try:
+        user = User.query.get(user_id)
+        if not user:
+            return {"error": "User not found"}
+
+        scores = Scores.query.filter(Scores.user_id == user_id).order_by(desc(Scores.time_stamp_of_attempt)).all()
+        
+        if not scores:
+            return {"message": "No scores available for export."}
+
+        quiz_summary = []
+        processed_quizzes = {}
+
+        for score in scores:
+            quiz_id = score.quiz_id
+
+            if quiz_id not in processed_quizzes:
+                quiz_attempts = Scores.query.filter(Scores.user_id == user_id, Scores.quiz_id == quiz_id).all()
+                highest_score = max(s.total_scored for s in quiz_attempts)
+                average_score = round(sum(s.total_scored for s in quiz_attempts) / len(quiz_attempts), 2)
+
+                quiz_summary.append({
+                    "Quiz ID": quiz_id,
+                    "Subject": score.quiz.chapter.subject.name,
+                    "Chapter": score.quiz.chapter.name,
+                    "Total Attempts": len(quiz_attempts),
+                    "Highest Score": highest_score,
+                    "Average Score": average_score
+                })
+
+                processed_quizzes[quiz_id] = True  
+
+        # Create PDF file
+        os.makedirs("exports", exist_ok=True)
+        pdf_path = f"exports/user_{user_id}_summary.pdf"
+
+        c = canvas.Canvas(pdf_path, pagesize=letter)
+        
+        # Add title and user details
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(150, 750, f"Performance Report - {user.full_name}")
+        
+        c.setFont("Helvetica", 12)
+        c.drawString(50, 720, f"Hello {user.full_name},")
+        c.drawString(50, 700, "Here is your monthly performance report. Keep up the great work!")
+
+        y_position = 670  # Start position for the table
+
+        # Add quiz data
+        for quiz in quiz_summary:
+            c.setFont("Helvetica-Bold", 12)
+            c.drawString(50, y_position, f"Quiz ID: {quiz['Quiz ID']}")
+            c.setFont("Helvetica", 11)
+            c.drawString(50, y_position - 20, f"Subject: {quiz['Subject']}")
+            c.drawString(50, y_position - 40, f"Chapter: {quiz['Chapter']}")
+            c.drawString(50, y_position - 60, f"Total Attempts: {quiz['Total Attempts']}")
+            c.drawString(50, y_position - 80, f"Highest Score: {quiz['Highest Score']}")
+            c.drawString(50, y_position - 100, f"Average Score: {quiz['Average Score']}")
+            y_position -= 140  # Move down for next quiz
+
+            if y_position < 100:
+                c.showPage()
+                y_position = 750
+
+        c.save()
+
+        return {"message": "Export successful", "file_path": pdf_path}
+
+    except Exception as e:
         return {"error": str(e)}
+
+@shared_task
+def send_monthly_performance_report():
+    """Send monthly performance reports as PDF attachments."""
+    with app.app_context():
+        users = User.query.filter(User.active == 1, User.email != "admin@example.com").all()
+
+        if not users:
+            return "No active users found."
+
+        for user in users:
+            # Generate the user summary PDF
+            export_result = export_user_summary(user.id)
+
+            if "error" in export_result:
+                file_path = None
+                performance_message = f"Error generating performance report: {export_result['error']}"
+            elif "file_path" in export_result:
+                file_path = export_result["file_path"]
+                performance_message = "Your monthly performance report is attached."
+
+            msg = Message(
+                "Your Monthly Performance Report",
+                sender=app.config["MAIL_USERNAME"],
+                recipients=[user.email],
+                body=f"""
+Hello {user.full_name},
+
+Your performance report for this month is here! Keep pushing forward and improving your skills.
+
+{performance_message}
+
+Best regards,  
+The Quiz Team  
+                """
+            )
+
+            # Attach the PDF file
+            if file_path and os.path.exists(file_path):
+                with open(file_path, "rb") as fp:
+                    msg.attach(
+                        filename=os.path.basename(file_path),
+                        content_type="application/pdf",
+                        data=fp.read()
+                    )
+
+            mail.send(msg)
+
+        return f"Monthly Reports sent to {len(users)} users."
+
 # Schedule Daily Reminders (9 AM)
 @scheduler.task("cron", id="daily_reminder", hour=9, minute=0)
 def schedule_daily_reminder():

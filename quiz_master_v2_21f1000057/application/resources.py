@@ -102,21 +102,25 @@ class SubjectResource(Resource):
         if not subject:
             return jsonify({"error": "Subject not found"}), 404
 
-        # Delete all associated chapters before deleting the subject
+        # Fetch all associated chapters
         chapters = Chapter.query.filter_by(subject_id=subject_id).all()
+        chapter_resource = ChapterResource()  # Create an instance of ChapterResource
+
+        # Delete each chapter using ChapterResource's delete function
         for chapter in chapters:
-            db.session.delete(chapter)
-        
+            chapter_resource.delete(chapter.id)
+
+        # Delete the subject after its chapters are removed
         db.session.delete(subject)
         db.session.commit()
 
         # Clear relevant cache entries
         redis_client.delete(f"subject_{subject_id}")
         redis_client.delete("subjects_list")
-        redis_client.delete("chapters_list")
         redis_client.delete(f"chapters_list_subject_{subject_id}")
 
         return jsonify({"message": "Subject and all its chapters deleted successfully"})
+
 
 
 # Register Resources
@@ -212,17 +216,30 @@ class ChapterResource(Resource):
         return jsonify({"message": "Chapter updated successfully"})
     @limiter.limit("5 per minute")
     def delete(self, chapter_id):
-        """Delete a chapter."""
+        """Delete a chapter and all its associated quizzes."""
         chapter = Chapter.query.get(chapter_id)
         if not chapter:
             return jsonify({"error": "Chapter not found"}), 404
+
+        # Find all quizzes related to the chapter
+        quizzes = Quiz.query.filter_by(chapter_id=chapter_id).all()
+
+        # Delete each quiz by calling the QuizResource delete function
+        for quiz in quizzes:
+            QuizResource.delete(self, quiz.id)  # Invoke delete method from QuizResource
+
+        # Now delete the chapter itself
         db.session.delete(chapter)
         db.session.commit()
+
+        # Clear relevant cache entries
         redis_client.delete(f"chapter_{chapter_id}")
         redis_client.delete(f"subject_{chapter.subject_id}")
         redis_client.delete("chapters_list")
         redis_client.delete("subjects_list")  # Ensure fresh subject list
-        return jsonify({"message": "Chapter deleted successfully"})
+
+        return jsonify({"message": "Chapter and all its quizzes deleted successfully"})
+
 
 # Register ChapterResource
 api.add_resource(ChapterResource, "/api/chapters", "/api/chapters/<int:chapter_id>")
@@ -309,28 +326,54 @@ class QuizResource(Resource):
         return jsonify({"message": "Quiz updated successfully"})
     @limiter.limit("5 per minute")
     def delete(self, quiz_id):
-        """Delete a quiz along with all its questions."""
-        quiz = Quiz.query.get(quiz_id)
-        if not quiz:
-            return jsonify({"error": "Quiz not found"}), 404
+        try:
+            # Fetch the quiz
+            quiz = Quiz.query.get(quiz_id)
+            if not quiz:
+                return jsonify({"error": "Quiz not found"}), 404
 
-        # Delete all questions associated with the quiz
-        questions = Questions.query.filter_by(quiz_id=quiz_id).all()
-        for question in questions:
-            db.session.delete(question)
+            # Fetch user IDs who attempted this quiz
+            user_ids = db.session.query(Scores.user_id).filter(Scores.quiz_id == quiz_id).distinct().all()
+            user_ids = [uid[0] for uid in user_ids]  # Convert list of tuples to user IDs
 
-        # Now delete the quiz itself
-        db.session.delete(quiz)
-        db.session.commit()
+            # 🔥 DELETE ASSOCIATED DATA FIRST 🔥
+            # 1️⃣ Delete all questions related to the quiz
+            Questions.query.filter(Questions.quiz_id == quiz_id).delete(synchronize_session=False)
 
-        # Clear relevant cache entries
-        redis_client.delete(f"quiz_{quiz_id}")
-        redis_client.delete(f"chapter_quizzes_{quiz.chapter_id}")
-        redis_client.delete("quizzes_list")
-        redis_client.delete(f"quiz_questions_{quiz_id}")  # Clear cache for quiz questions
+            # 2️⃣ Delete associated scores
+            Scores.query.filter(Scores.quiz_id == quiz_id).delete(synchronize_session=False)
 
-        return jsonify({"message": "Quiz and its questions deleted successfully"})
+            # 3️⃣ Delete the quiz itself
+            db.session.delete(quiz)
+            db.session.commit()
 
+            # 🧹 Clear cache
+            cache_keys_to_delete = [
+                f"scores_user_{user_id}" for user_id in user_ids
+            ] + [
+                f"scores_user_{user_id}_quiz_{quiz_id}" for user_id in user_ids
+            ] + [
+                f"scores_user_{user_id}_quiz_{quiz_id}_latest" for user_id in user_ids
+            ] + [
+                f"user_summary_{user_id}" for user_id in user_ids
+            ] + [
+                f"quiz_{quiz_id}",
+                f"quiz_questions_{quiz_id}",
+                "quizzes_list",
+                "questions_list",
+                "scores_list",
+                "quiz_attempts_stats",
+                "subject_attempts_stats"
+            ]
+
+            for key in cache_keys_to_delete:
+                redis_client.delete(key)
+
+            return jsonify({"message": "Quiz and associated data deleted successfully"}), 200
+
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({"error": str(e)}), 500
 
 # Register QuizResource
 api.add_resource(QuizResource, "/api/quizzes", "/api/quizzes/<int:quiz_id>")
